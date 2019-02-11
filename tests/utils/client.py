@@ -4,11 +4,12 @@ import os
 import random
 import sys
 import time
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from datetime import datetime
 
-import make
+from make.jobserver import utils
+from make.jobserver import client
 
 
 def log(msg):
@@ -20,14 +21,14 @@ def main(args):
     make_flags = os.environ.get('MAKEFLAGS', '')
 
     # Should run things?
-    if not make.should_run_submake(make_flags):
+    if not utils.should_run_submake(make_flags):
         return 0
 
-    if not make.has_jobserver(make_flags):
+    if not utils.has_jobserver(make_flags):
         log("ERROR: No jobserver!")
         return -1
 
-    jobserver = make.JobServer(make_flags)
+    jobserver = client.JobServer(make_flags)
     tokens = []
     log("Got jobserver: {}".format(jobserver))
 
