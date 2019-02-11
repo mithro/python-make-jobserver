@@ -28,7 +28,7 @@ def main(args):
         log("ERROR: No jobserver!")
         return -1
 
-    jobserver = client.JobServer(make_flags)
+    jobserver = client.JobServerClient(make_flags)
     tokens = []
     log("Got jobserver: {}".format(jobserver))
 
