@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 
+import fcntl
+import os
+import select
+import struct
+import termios
+
+
 def set_nonblocking(fileobj):
     if isinstance(fileobj, int):
         fd = fileobj
@@ -48,6 +55,10 @@ def nonblocking_fd_wrapper(blocking_fd):
     # Continuing in the parent process
     read_end = os.fdopen(write_end, 'rb')
     set_nonblocking(read_end)
+
+
+TIOCGSERIAL = getattr(termios, 'TIOCGSERIAL', 0x5411)
+TIOCM_zero_str = struct.pack('I', 0)
 
 
 def output_waiting(fileobj):

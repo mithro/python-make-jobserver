@@ -17,20 +17,24 @@ def log(msg):
 
 
 def main(args):
-    make_cmd = os.environ.get('MAKE', 'make')
-    make_flags = os.environ.get('MAKEFLAGS', '')
+    if len(args) < 1:
+        name = 'client'
+    else:
+        name = ' '.join(args[1:])
 
     # Should run things?
-    if not utils.should_run_submake(make_flags):
+    if not utils.should_run_submake():
         return 0
 
-    if not utils.has_jobserver(make_flags):
+    if not utils.has_jobserver():
         log("ERROR: No jobserver!")
         return -1
 
-    jobserver = client.JobServerClient(make_flags)
+    log("{} - Got MAKEFLAGS: {}".format(name, utils.get_make_flags()))
+
+    jobserver = client.JobServerClient()
     tokens = []
-    log("Got jobserver: {}".format(jobserver))
+    log("{} - Got jobserver: {}".format(name, jobserver))
 
     timeout = random.randint(5, 20)
 
@@ -41,10 +45,10 @@ def main(args):
             if len(tokens) > 5:
                 break
         else:
-            log('Got token: {} (tokens: {})'.format(repr(token), tokens))
+            log('{} - Got token: {} (tokens: {})'.format(name, repr(token), tokens))
             tokens.append(token)
 
-    print(os.getpid(), "Got {} tokens - {}".format(len(tokens), tokens))
+    log('{} - Got {} tokens - {}'.format(name, len(tokens), tokens))
     return 0
 
 

@@ -106,6 +106,8 @@ def replace_jobserver(make_flags, new_jobserver):
 
 
 def fds_for_jobserver(make_flags=None):
+    make_flags = get_make_flags(make_flags)
+
     if not has_jobserver(make_flags):
         return None, None
 
