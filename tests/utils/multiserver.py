@@ -62,9 +62,9 @@ def main(args):
                 pass
 
             if retcode is not None:
-                processes[childid] = p
+                processes[childid] = retcode
                 log("Child {} - Command '{}' finished with {}".format(childid, cmd, retcode))
-                jobserver.cleanup_client(childid)
+                jobserver.cleanup_client(childid, log=log)
 
         if all(isinstance(p, int) for p in processes.values()):
             break

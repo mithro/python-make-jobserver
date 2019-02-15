@@ -55,7 +55,7 @@ def main(args):
 
     log("Command '{}' finished with {}".format(cmd, retcode))
 
-    jobserver.cleanup_client(childid)
+    jobserver.cleanup_client(childid, log=log)
     return retcode
 
 

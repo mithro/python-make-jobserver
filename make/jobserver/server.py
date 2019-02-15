@@ -17,7 +17,7 @@ from . import _support
 class JobServer:
 
     pass_fds = namedtuple('pass_fds', ['p2c_rd', 'c2p_wr'])
-    keep_fileobjs = namedtuple('keep_fileobjs', ['c2p_rd_fd', 'p2c_wr_fd'])
+    keep_fileobjs = namedtuple('keep_fileobjs', ['c2p_rd_fileobj', 'p2c_wr_fileobj', 'p2c_rd_fileobj'])
 
     def __init__(self, num_tokens=None):
         if num_tokens is None:
@@ -73,26 +73,34 @@ class JobServer:
         #assert token not in self._tokens
         self._tokens.append(token)
 
-    def _add_client(self, cid, c2p_rd_fd, p2c_wr_fd):
+    def _add_client(self, cid, keep_fileobjs):
         """
         c2p_rd_fd = Pathway we get the tokens back from the child on.
         p2c_wr_fd = Pathway we provide tokens to the child on.
 
         """
-        assert p2c_wr_fd
-        assert c2p_rd_fd
+        self.cid2fileobjs[cid] = keep_fileobjs
 
-        self.cid2fileobjs[cid] = self.keep_fileobjs(c2p_rd_fd, p2c_wr_fd)
+        assert keep_fileobjs.c2p_rd_fileobj not in self.fileobj2cid
+        self.fileobj2cid[keep_fileobjs.c2p_rd_fileobj] = cid
+        self.poller.register(keep_fileobjs.c2p_rd_fileobj, select.EPOLLHUP | select.EPOLLIN)
 
-        assert c2p_rd_fd not in self.fileobj2cid
-        self.fileobj2cid[c2p_rd_fd] = cid
-        self.poller.register(c2p_rd_fd, select.EPOLLHUP | select.EPOLLIN)
-
-        assert p2c_wr_fd not in self.fileobj2cid
-        self.fileobj2cid[p2c_wr_fd] = cid
-        self.poller.register(p2c_wr_fd, select.EPOLLHUP | select.EPOLLOUT)
+        assert keep_fileobjs.p2c_wr_fileobj not in self.fileobj2cid
+        self.fileobj2cid[keep_fileobjs.p2c_wr_fileobj] = cid
+        self.poller.register(keep_fileobjs.p2c_wr_fileobj, select.EPOLLHUP | select.EPOLLOUT)
 
         self.cid2tokens[cid] = []
+
+    def _del_client(self, cid):
+        assert cid in self.cid2tokens
+        assert cid in self.cid2fileobjs
+
+        in_fileobj, out_fileobj, client_fileobj = self.cid2fileobjs[cid]
+        self.poller.unregister(in_fileobj)
+        self.poller.unregister(out_fileobj)
+
+        del self.cid2tokens[cid]
+        del self.cid2fileobjs[cid]
 
     def _get_next_token(self):
         if len(self._tokens) == 0:
@@ -108,41 +116,61 @@ class JobServer:
         c2p_rd, c2p_wr = os.pipe()
         p2c_rd, p2c_wr = os.pipe()
 
+
         # Pathway we provide tokens to the child
-        p2c_wr_fd = os.fdopen(p2c_wr, mode='wb', buffering=0)
+        p2c_wr_fileobj = os.fdopen(p2c_wr, mode='wb', buffering=0)
         # Pathway we get the tokens back from the child
-        c2p_rd_fd = os.fdopen(c2p_rd, mode='rb', buffering=0)
-        cid = c2p_rd_fd.fileno()
-        self._add_client(cid, c2p_rd_fd, p2c_wr_fd)
+        c2p_rd_fileobj = os.fdopen(c2p_rd, mode='rb', buffering=0)
+        cid = c2p_rd_fileobj.fileno()
 
-        return cid, self.pass_fds(p2c_rd, c2p_wr)
+        # Copy of the p2c_rd file descriptor to allow us to read any left over
+        # tokens in the pipe.
+        p2c_rd_fileobj = os.fdopen(os.dup(p2c_rd), mode='rb', buffering=0)
 
-    def cleanup_client(self, cid, allow_tokens=False):
+        keep_objs = self.keep_fileobjs(c2p_rd_fileobj, p2c_wr_fileobj, p2c_rd_fileobj)
+        pass_fds = self.pass_fds(p2c_rd, c2p_wr)
+
+        self._add_client(cid, keep_objs)
+
+        return cid, pass_fds
+
+    def cleanup_client(self, cid, allow_tokens=False, log=None):
+        if log is None:
+            log = lambda x: None
+
+        self._log('Cleaning up {}'.format(cid))
         assert cid in self.cid2tokens
         assert cid in self.cid2fileobjs
 
-        in_fd, out_fd = self.cid2fileobjs[cid]
+        in_fileobj, out_fileobj, client_fileobj = self.cid2fileobjs[cid]
 
         # Get any tokens that might be pending on the returning token pathway.
         while True:
-            tokenbytes = in_fd.read()
+            tokenbytes = in_fileobj.read()
             if len(tokenbytes) > 0:
                 for token in tokenbytes:
                     token = self.cid2tokens[cid][0]
                     self._unassign_token(cid, token)
                 continue
             assert tokenbytes == b'', repr(tokens)
-            in_fd.close()
+            in_fileobj.close()
             break
 
-        # Check for any pending tokens that the child never used
-        pending_count = _support.output_waiting(out_fd)
-        assigned_tokens = self.cid2tokens[cid]
-        assert len(assigned_tokens) >= pending_count, (assigned_tokens, pending_count)
+        # Close the output pathway
+        out_fileobj.close()
 
-        out_fd.close()
-        for i in range(0, pending_count):
-            self._unassign_token(cid, assigned_tokens[0])
+        # Open the read side of the pipe and read back anything still left in
+        # it.
+        while True:
+            tokenbytes = client_fileobj.read()
+            if len(tokenbytes) > 0:
+                for token in tokenbytes:
+                    token = self.cid2tokens[cid][0]
+                    self._unassign_token(cid, token)
+                continue
+            assert tokenbytes == b'', repr(tokens)
+            client_fileobj.close()
+            break
 
         # There should be no tokens currently left now (unless the client
         # forgot to return them...)
@@ -150,6 +178,8 @@ class JobServer:
         assert allow_tokens or len(current_tokens) == 0, (cid, current_tokens)
         for token in current_tokens:
             self._unassign_token(cid, token)
+
+        self._del_client(cid)
 
     @staticmethod
     def flags(pass_fds):

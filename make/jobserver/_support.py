@@ -91,6 +91,16 @@ class Poller:
     def __init__(self):
         self.epoll = select.epoll()
         self.mapping = {}
+        self.closed = []
+
+    def _cleanup(self):
+        toremove = []
+        for fd, fileobj in self.mapping.items():
+            if fileobj.closed:
+                toremove.append(fd)
+        for fd in toremove:
+            self.closed.append(self.mapping[fd])
+            del self.mapping[fd]
 
     def register(self, fileobj, flags):
         assert fileobj.fileno() not in self.mapping, (fileobj.fileno(), fileobj, self.mapping)
@@ -103,8 +113,19 @@ class Poller:
 
         self.epoll.register(fileobj, flags)
 
+    def unregister(self, fileobj):
+        self._cleanup()
+        if fileobj.closed:
+            assert fileobj in self.closed
+            self.closed.remove(fileobj)
+        else:
+            assert fileobj.fileno() in self.mapping
+            self.epoll.unregister(fileobj)
+            del self.mapping[fileobj.fileno()]
+
     def poll(self, *args, **kw):
         for fileno, event in self.epoll.poll(*args, **kw):
+            self._cleanup()
 
             events = []
             for v, name in EPOLL_NAMES.items():
