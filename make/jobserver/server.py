@@ -70,7 +70,7 @@ class JobServer:
         assert token in self.cid2tokens[cid], (token, self.cid2tokens[cid])
         self.cid2tokens[cid].remove(token)
 
-        #assert token not in self._tokens
+        assert token not in self._tokens
         self._tokens.append(token)
 
     def _add_client(self, cid, keep_fileobjs):
@@ -110,12 +110,11 @@ class JobServer:
 
     def tokens(self, cid):
         assert cid in self.cid2tokens
-        return self.cid2tokens[cid]
+        return list(self.cid2tokens[cid])
 
     def create_client(self):
         c2p_rd, c2p_wr = os.pipe()
         p2c_rd, p2c_wr = os.pipe()
-
 
         # Pathway we provide tokens to the child
         p2c_wr_fileobj = os.fdopen(p2c_wr, mode='wb', buffering=0)
@@ -156,21 +155,23 @@ class JobServer:
             in_fileobj.close()
             break
 
-        # Close the output pathway
-        out_fileobj.close()
-
         # Open the read side of the pipe and read back anything still left in
         # it.
-        while True:
+        out = _support.output_waiting(out_fileobj)
+        out_fileobj.close()
+
+        while out > 0:
             tokenbytes = client_fileobj.read()
             if len(tokenbytes) > 0:
                 for token in tokenbytes:
                     token = self.cid2tokens[cid][0]
                     self._unassign_token(cid, token)
                 continue
+
             assert tokenbytes == b'', repr(tokens)
-            client_fileobj.close()
             break
+
+        client_fileobj.close()
 
         # There should be no tokens currently left now (unless the client
         # forgot to return them...)
@@ -210,6 +211,7 @@ class JobServer:
                     out = _support.output_waiting(fileobj)
                     # Hand out a token?
                     if out > 0:
+                        self._log('{} - Child already has pending tokens'.format(fileobj, cid, out))
                         continue
 
                     token = self._get_next_token()

@@ -25,7 +25,10 @@ class JobServerClient:
     def _read_with_timeout(self):
         try:
             signal.setitimer(signal.ITIMER_REAL, 0.1)
-            return self.tokens_in.read(1)
+            data = self.tokens_in.read(1)
+            if len(data) == '':
+                return None
+            return data
         except InterruptedError:
             return None
 
