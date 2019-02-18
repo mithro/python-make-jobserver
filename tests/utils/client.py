@@ -42,7 +42,7 @@ def main(args):
     tokens = []
     log("{} - Got jobserver: {}".format(name, jobserver))
 
-    timeout = random.randint(5, 20)
+    timeout = random.randint(5, 20) / 100.0
 
     start_time = datetime.utcnow()
     while (datetime.utcnow() - start_time).total_seconds() < timeout:

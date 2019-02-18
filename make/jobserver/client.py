@@ -7,7 +7,7 @@ from . import utils
 
 
 try:
-    InterruptedError
+    InterruptedError = InterruptedError
 except NameError:
     class InterruptedError(BaseException):
         pass
@@ -21,20 +21,28 @@ class JobServerClient:
         self.tokens_in = job_rd_fd
         self.tokens_out = job_wr_fd
 
-        signal.signal(signal.SIGALRM, self._sig_alarm)
-
     def _sig_alarm(self, *args):
         raise InterruptedError(*args)
 
     def _read_with_timeout(self):
+        oldhandler = signal.signal(signal.SIGALRM, self._sig_alarm)
         try:
             signal.setitimer(signal.ITIMER_REAL, 0.1)
             data = self.tokens_in.read(1)
-            if len(data) == "":
+            if len(data) == 0:
                 return None
             return data
         except InterruptedError:
             return None
+        finally:
+            # Clear signals and then signal handlers
+            while True:
+                try:
+                    signal.setitimer(signal.ITIMER_REAL, 0)
+                    break
+                except InterruptedError:
+                    pass
+            signal.signal(signal.SIGALRM, oldhandler)
 
     def get_token(self):
         if b"" not in self.tokens:
