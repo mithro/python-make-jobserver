@@ -1,22 +1,9 @@
 #!/usr/bin/env python3
 
-from datetime import datetime
-import fcntl
-import io
-import os
-import re
-import select
-import signal
-import struct
-import subprocess
-import termios
-import traceback
-
 from . import server
 
 
 class JobServerProxy(server.JobServer):
-
     def __init__(self, client):
         self.client = client
         self.token2bytes = {}
@@ -56,4 +43,3 @@ class JobServerProxy(server.JobServer):
         finally:
             if len(self._tokens) > 1:
                 self._shrink_tokens()
-

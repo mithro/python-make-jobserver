@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 
+from __future__ import print_function
+
 import os
-import random
 import subprocess
 import sys
-import time
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from datetime import datetime
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from make.jobserver import utils
 from make.jobserver import server
 
 
 def log(msg):
-    print("\n".join("{} - {}".format(os.getpid(), l) for l in msg.split('\n')), end="\n", flush=True)
+    print(
+        "\n".join("{} - {}".format(os.getpid(), l) for l in msg.split("\n")),
+        end="\n",
+        flush=True,
+    )
 
 
 def main(args):
@@ -33,15 +36,10 @@ def main(args):
 
     env = dict(os.environ)
     # FIXME: This isn't quite right?
-    env['MAKEFLAGS'] = utils.get_make_flags() + jobserver.flags(pass_fds)
-    cmd = ' '.join(args[1:])
-    log("Running '{}' with MAKEFLAGS='{}'".format(cmd, env['MAKEFLAGS']))
-    p = subprocess.Popen(
-        args[1:],
-        shell=False,
-        env=env,
-        pass_fds=pass_fds,
-    )
+    env["MAKEFLAGS"] = utils.get_make_flags() + jobserver.flags(pass_fds)
+    cmd = " ".join(args[1:])
+    log("Running '{}' with MAKEFLAGS='{}'".format(cmd, env["MAKEFLAGS"]))
+    p = subprocess.Popen(args[1:], shell=False, env=env, pass_fds=pass_fds)
     for fileno in pass_fds:
         os.close(fileno)
 

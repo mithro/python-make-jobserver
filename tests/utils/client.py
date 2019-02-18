@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
+from __future__ import print_function
+
 import os
 import random
 import sys
-import time
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from datetime import datetime
@@ -13,14 +15,18 @@ from make.jobserver import client
 
 
 def log(msg):
-    print("\n".join("{} - {}".format(os.getpid(), l) for l in msg.split('\n')), end="\n", flush=True)
+    print(
+        "\n".join("{} - {}".format(os.getpid(), l) for l in msg.split("\n")),
+        end="\n",
+        flush=True,
+    )
 
 
 def main(args):
     if len(args) < 1:
-        name = 'client'
+        name = "client"
     else:
-        name = ' '.join(args[1:])
+        name = " ".join(args[1:])
 
     # Should run things?
     if not utils.should_run_submake():
@@ -39,16 +45,20 @@ def main(args):
     timeout = random.randint(5, 20)
 
     start_time = datetime.utcnow()
-    while (datetime.utcnow()-start_time).total_seconds() < timeout:
+    while (datetime.utcnow() - start_time).total_seconds() < timeout:
         token = jobserver.get_token()
         if token is None:
             if len(tokens) > 5:
                 break
         else:
-            log('{} - Got token: {} (tokens: {})'.format(name, repr(token), tokens))
+            log(
+                "{} - Got token: {} (tokens: {})".format(
+                    name, repr(token), tokens
+                )
+            )
             tokens.append(token)
 
-    log('{} - Got {} tokens - {}'.format(name, len(tokens), tokens))
+    log("{} - Got {} tokens - {}".format(name, len(tokens), tokens))
     return 0
 
 

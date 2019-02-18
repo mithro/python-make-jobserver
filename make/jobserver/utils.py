@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 """Helpful utils for working with Make's jobserver."""
 
 import os
@@ -7,15 +6,15 @@ import re
 
 
 def get_make(make=None):
-    if make_flags is None:
-        make_flags = os.environ.get('MAKE', 'make')
-    assert isinstance(make_flags, str), repr(make_flags)
-    return make_flags
+    if make is None:
+        make = os.environ.get("MAKE", "make")
+    assert isinstance(make, str), repr(make)
+    return make
 
 
 def get_make_flags(make_flags=None):
     if make_flags is None:
-        make_flags = os.environ.get('MAKEFLAGS', '')
+        make_flags = os.environ.get("MAKEFLAGS", "")
     assert isinstance(make_flags, str), repr(make_flags)
     return make_flags
 
@@ -73,18 +72,18 @@ def should_run_submake(make_flags=None):
     """
     make_flags = get_make_flags(make_flags)
 
-    r = re.search(r'(?:^|\s)[^-]*(n|q)[^\s]*(\s|$)', make_flags)
+    r = re.search(r"(?:^|\s)[^-]*(n|q)[^\s]*(\s|$)", make_flags)
     if not r:
         return True
     return not bool(r.groups()[0])
 
 
-_JOBSERVER_REGEX = '--jobserver-fds=([0-9]+),([0-9]+)'
+_JOBSERVER_REGEX = "--jobserver-fds=([0-9]+),([0-9]+)"
 
 
 def has_jobserver(make_flags=None):
     make_flags = get_make_flags(make_flags)
-    return '--jobserver' in make_flags
+    return "--jobserver" in make_flags
 
 
 def replace_jobserver(make_flags, new_jobserver):
@@ -101,7 +100,11 @@ def replace_jobserver(make_flags, new_jobserver):
         return make_flags
     else:
         new_make_flags = re.sub(_JOBSERVER_REGEX, new_jobserver, make_flags)
-        assert new_jobserver in new_make_flags, (make_flags, new_jobserver, new_make_flags)
+        assert new_jobserver in new_make_flags, (
+            make_flags,
+            new_jobserver,
+            new_make_flags,
+        )
         return new_make_flags
 
 
@@ -121,8 +124,8 @@ def fds_for_jobserver(make_flags=None):
     assert job_wr > 2, (job_rd, job_wr, make_flags)
 
     # Make sure the file descriptors exist..
-    job_rd_fd = os.fdopen(int(job_rd), 'rb', 0)
+    job_rd_fd = os.fdopen(int(job_rd), "rb", 0)
     assert job_rd_fd
-    job_wr_fd = os.fdopen(int(job_wr), 'wb', 0)
+    job_wr_fd = os.fdopen(int(job_wr), "wb", 0)
     assert job_wr_fd
     return job_rd_fd, job_wr_fd

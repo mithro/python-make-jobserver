@@ -51,14 +51,14 @@ setup(
         'test': ['coverage'],
     },
 
-    #entry_points={
-    #    'console_scripts': [
-    #        'sample=sample:main',
-    #    ],
-    #},
+    # entry_points={
+    #     'console_scripts': [
+    #         'sample=sample:main',
+    #     ],
+    # },
 
-    project_urls={  # Optional
-        'Bug Reports': 'https://github.com/mithro/python-make-jobserver/issues',
+    project_urls={
+        'Bug Reports': 'https://github.com/mithro/python-make-jobserver/issues',  # noqa
         'Source': 'https://github.com/mithro/python-make-jobserver/',
     },
 )

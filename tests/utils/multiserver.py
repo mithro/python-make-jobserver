@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 
+from __future__ import print_function
+
 import os
-import random
 import subprocess
 import sys
-import time
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from datetime import datetime
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from make.jobserver import utils
 from make.jobserver import server
 
 
 def log(msg):
-    print("\n".join("{} - {}".format(os.getpid(), l) for l in msg.split('\n')), end="\n", flush=True)
+    print(
+        "\n".join("{} - {}".format(os.getpid(), l) for l in msg.split("\n")),
+        end="\n",
+        flush=True,
+    )
 
 
 def main(args):
@@ -33,16 +36,15 @@ def main(args):
     for i in range(4):
         childid, pass_fds = jobserver.create_client()
         env = dict(os.environ)
-        env['MAKEFLAGS'] = utils.get_make_flags() + jobserver.flags(pass_fds)
-        cmd = ' '.join(args[1:])
+        env["MAKEFLAGS"] = utils.get_make_flags() + jobserver.flags(pass_fds)
+        cmd = " ".join(args[1:])
 
-        log("Child {} - Running '{}' with MAKEFLAGS='{}'".format(childid, cmd, env['MAKEFLAGS']))
-        p = subprocess.Popen(
-            args[1:],
-            shell=False,
-            env=env,
-            pass_fds=pass_fds,
+        log(
+            "Child {} - Running '{}' with MAKEFLAGS='{}'".format(
+                childid, cmd, env["MAKEFLAGS"]
+            )
         )
+        p = subprocess.Popen(args[1:], shell=False, env=env, pass_fds=pass_fds)
         for fileno in pass_fds:
             os.close(fileno)
 
@@ -63,7 +65,11 @@ def main(args):
 
             if retcode is not None:
                 processes[childid] = retcode
-                log("Child {} - Command '{}' finished with {}".format(childid, cmd, retcode))
+                log(
+                    "Child {} - Command '{}' finished with {}".format(
+                        childid, cmd, retcode
+                    )
+                )
                 jobserver.cleanup_client(childid, log=log)
 
         if all(isinstance(p, int) for p in processes.values()):
