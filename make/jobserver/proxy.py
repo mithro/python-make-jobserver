@@ -12,7 +12,10 @@ class JobServerProxy(server.JobServer):
     def _grow_tokens(self):
         tokenbyte = self.client.get_token()
         if tokenbyte is None:
-            print("Tried to _grow_tokens but get_token failed!")
+            self._log(
+                "Tried to _grow_tokens but get_token failed! {} {}".format(
+                    repr(tokenbyte), self._tokens))
+
             return
 
         tid = 0
@@ -21,16 +24,18 @@ class JobServerProxy(server.JobServer):
         assert tid not in self.token2bytes
         self.token2bytes[tid] = tokenbyte
         self._tokens.append(tid)
-        print("_grow_tokens", repr(tokenbyte), tid, self._tokens)
+        self._log("_grow_tokens {} {} {}".format(
+            repr(tokenbyte), tid, self._tokens))
 
     def _shrink_tokens(self):
         tokens = list(self._tokens)
         for tid in tokens:
             tokenbyte = self.token2bytes[tid]
             del self.token2bytes[tid]
-            self.client.return_token(tid)
+            self.client.return_token(tokenbyte)
             self._tokens.remove(tid)
-            print("_shrink_tokens", repr(tokenbyte), tid, self._tokens)
+            self._log("_shrink_tokens {} {} {}".format(
+                repr(tokenbyte), tid, self._tokens))
 
     def _get_next_token(self):
         if len(self._tokens) == 0:
@@ -43,3 +48,11 @@ class JobServerProxy(server.JobServer):
         finally:
             if len(self._tokens) > 1:
                 self._shrink_tokens()
+
+    def cleanup(self, allow_tokens=True, log=lambda msg: None):
+        server.JobServer.cleanup(self, allow_tokens, log)
+
+        self._log = log
+        while len(self._tokens) > 1:
+            self._shrink_tokens()
+        self._clear_logger()

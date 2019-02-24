@@ -22,6 +22,8 @@ def log(msg):
 
 
 def main(args):
+    proxy_retcode = int(args[1])
+
     # Should run things?
     if not utils.should_run_submake():
         return 0
@@ -43,9 +45,9 @@ def main(args):
     env["MAKEFLAGS"] = utils.replace_jobserver(
         utils.get_make_flags(), jobproxy.flags(pass_fds)
     )
-    cmd = " ".join(args[1:])
+    cmd = " ".join(args[2:])
     log("Running '{}' with MAKEFLAGS='{}'".format(cmd, env["MAKEFLAGS"]))
-    p = subprocess.Popen(args[1:], shell=False, env=env, pass_fds=pass_fds)
+    p = subprocess.Popen(args[2:], shell=False, env=env, pass_fds=pass_fds)
     for fileno in pass_fds:
         os.close(fileno)
 
@@ -58,9 +60,9 @@ def main(args):
             pass
 
     log("Command '{}' finished with {}".format(cmd, retcode))
-
-    jobproxy.cleanup_client(childid, log=log)
-    return retcode
+    jobproxy.poll(timeout=0.1, log=log)
+    jobproxy.cleanup(log=log)
+    return proxy_retcode
 
 
 if __name__ == "__main__":

@@ -62,7 +62,7 @@ class JobServerClient:
         return token
 
     def return_token(self, token):
-        assert isinstance(token, bytes)
+        assert isinstance(token, bytes), repr(token)
 
         if token != b"":
             # Return the token to jobserver

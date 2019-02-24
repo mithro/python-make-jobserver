@@ -57,8 +57,8 @@ class JobServer:
 
     def _assign_token(self, cid, token):
         self._log(
-            "Child {} getting token {} (remaining: {})".format(
-                cid, token, self._tokens
+            "Child {} getting token {} (assigned: {}, available: {})".format(
+                cid, token, self.cid2tokens[cid], self._tokens
             )
         )
         assert token not in self.token2cid, (token, self.token2cid)
@@ -71,8 +71,13 @@ class JobServer:
         assert token in self._tokens, (token, self._tokens)
         self._tokens.remove(token)
 
-    def _unassign_token(self, cid, token):
-        self._log("Child {} returning token {}".format(cid, token))
+    def _unassign_token(self, cid):
+        assert len(self.cid2tokens) > 0, self.cid2tokens[cid]
+        token = self.cid2tokens[cid][0]
+
+        self._log(
+            "Child {} returning token {} (assigned: {}, available: {})".format(
+                cid, token, self.cid2tokens[cid], self._tokens))
 
         assert token in self.token2cid, (cid, token, self.token2cid)
         assert self.token2cid[token] == cid, (
@@ -153,11 +158,8 @@ class JobServer:
 
         return cid, pass_fds
 
-    def cleanup_client(self, cid, allow_tokens=False, log=None):
-        if log is None:
-            def _log(msg):
-                pass
-            log = _log
+    def cleanup_client(self, cid, allow_tokens=False, log=lambda msg: None):
+        self._log = log
 
         self._log("Cleaning up {}".format(cid))
         assert cid in self.cid2tokens
@@ -168,10 +170,11 @@ class JobServer:
         # Get any tokens that might be pending on the returning token pathway.
         while True:
             tokenbytes = in_fileobj.read()
+            self._log("Input tokenbytes to return {} {}".format(
+                repr(tokenbytes), self.cid2tokens[cid]))
             if len(tokenbytes) > 0:
-                for token in tokenbytes:
-                    token = self.cid2tokens[cid][0]
-                    self._unassign_token(cid, token)
+                for tb in tokenbytes:
+                    self._unassign_token(cid)
                 continue
             assert tokenbytes == b"", repr(tokenbytes)
             in_fileobj.close()
@@ -184,10 +187,11 @@ class JobServer:
 
         while out > 0:
             tokenbytes = client_fileobj.read()
+            self._log("Output tokenbytes to return {} {}".format(
+                repr(tokenbytes), self.cid2tokens[cid]))
             if len(tokenbytes) > 0:
-                for token in tokenbytes:
-                    token = self.cid2tokens[cid][0]
-                    self._unassign_token(cid, token)
+                for tb in tokenbytes:
+                    self._unassign_token(cid)
                 continue
 
             assert tokenbytes == b"", repr(tokenbytes)
@@ -198,11 +202,19 @@ class JobServer:
         # There should be no tokens currently left now (unless the client
         # forgot to return them...)
         current_tokens = self.cid2tokens[cid]
-        assert allow_tokens or len(current_tokens) == 0, (cid, current_tokens)
-        for token in current_tokens:
-            self._unassign_token(cid, token)
+        assert allow_tokens or len(current_tokens) == 0, (
+            os.getpid(), cid, current_tokens)
+        while current_tokens:
+            self._unassign_token(cid)
 
         self._del_client(cid)
+
+        self._clear_logger()
+
+    def cleanup(self, allow_tokens=True, log=lambda msg: None):
+        for cid in list(self.cid2tokens):
+            self.cleanup_client(cid, allow_tokens, log)
+        assert len(self.cid2tokens) == 0, self.cid2tokens
 
     @staticmethod
     def flags(pass_fds):
@@ -218,32 +230,32 @@ class JobServer:
         for fileobj, events in self.poller.poll():
             cid = self.fileobj2cid[fileobj]
             self._log(
-                "fileobj:{} cid:{} events:{}".format(fileobj, cid, events)
+                "cid:{} events:{}".format(cid, events)
             )
 
             if cid == "signal":
                 sig = fileobj.read(1)
-                self._log("{} Signal {} {}".format(fileobj, events, sig))
+                self._log("Signal {} {}".format(events, sig))
 
             else:
                 if "EPOLLIN" in events:
                     # Child is returning a token..
                     tokenbyte = fileobj.read(1)
-                    token = self.cid2tokens[cid][0]
+                    assert len(tokenbyte) == 1, repr(tokenbyte)
                     self._log(
-                        "{} - Child {} return token {} ({})".format(
-                            fileobj, cid, token, repr(tokenbyte)
+                        "Child {} return token ({})".format(
+                            cid, repr(tokenbyte)
                         )
                     )
-                    self._unassign_token(cid, token)
+                    self._unassign_token(cid)
 
                 if "EPOLLOUT" in events:
                     out = _support.output_waiting(fileobj)
                     # Hand out a token?
                     if out > 0:
                         self._log(
-                            "{} - Child already has pending tokens".format(
-                                fileobj, cid, out
+                            "Child already has pending tokens".format(
+                                cid, out
                             )
                         )
                         continue
@@ -253,11 +265,7 @@ class JobServer:
                         self._log("Unable to get token for {}".format(cid))
                         continue
                     self._assign_token(cid, token)
-                    self._log(
-                        "{} - Child {} given token {}".format(
-                            fileobj, cid, token
-                        )
-                    )
+                    self._log("Child {} given token {}".format(cid, token))
                     try:
                         fileobj.write(b"+")
                     except BrokenPipeError:
