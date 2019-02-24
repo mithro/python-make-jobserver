@@ -36,6 +36,8 @@ class JobServerClient:
             return None
         finally:
             # Clear signals and then signal handlers
+            # This function can actually raise a InterruptedError, if so we
+            # just try the command again.
             while True:
                 try:
                     signal.setitimer(signal.ITIMER_REAL, 0)
